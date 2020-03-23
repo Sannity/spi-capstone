@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Register</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="css/login.css">
+</head>
+<body>
+    <div class="login-container">
+        <span class="login-spacer"></span>
+        <h1 class="login-header">Register</h1>
+        <form class="login-form"> 
+            <div class="login-fields">
+                <input class="field" type="text" name="username" id="username" placeholder="Username" required>
+                <input class="field" type="password" name="password" id="password" placeholder="Password" required>
+                <input class="field" type="email" name="email" id="email" placeholder="E-mail" required>
+            </div>
+            <input class="login-submit" type="submit" value="Register">
+        </form>
+        <span id="login-error" class="login-error"></span>
+        <span class="login-footer">Already have an account? <a href="/login">Log in!</a></span>
+    </div>
+    <script>
+        var queryDict = {}
+        location.search.substr(1).split("&").forEach(function(item) {queryDict[item.split("=")[0]] = item.split("=")[1]})
+        if(queryDict['error'])
+            $('#login-error').text(decodeURIComponent(queryDict['error'])).fadeIn(1000);
+    </script>
+</body>
+</html>
