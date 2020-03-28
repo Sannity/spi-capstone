@@ -1,0 +1,25 @@
+<div class="link-device-container"> 
+    <% if(linked == true) { %>
+    <p>asdasd</p>
+    <% } else { %>
+        <div class="sub-heading section-header">Link to device<div><i class="fas fa-caret-down"></i></div></div>
+        <div class="section-body">
+            <style>
+                .link-device{
+                    padding: 2rem;
+                    display: flex;
+                    justify-content: center;
+                }
+                .link-device input{
+                    border-bottom: 1px solid var(--black);
+                    margin-right: 2rem;
+                    margin-left: 2rem;
+                }
+            </style>
+            <div class="link-device">
+                <p style="margin: 0;">Provide this code to the client: </p>
+                <input oninput="$(this).val('<%= link_code %>')" value="<%= link_code %>"/>
+            </div>
+        </div>
+    <% } %>
+</div>

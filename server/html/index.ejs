@@ -13,6 +13,7 @@
             --ui-item-bg: #FFFFFF;
             --ui-item-bg-hover: #e0e0e0;
             --ui-item-shadow: 4px 4px 3px 2px #4242424f;
+            --ui-item-selected: var(--graiant-start);
             --red: #ed001c;
             --black: #2a2a2a;
             --green: #64bb00;
@@ -104,6 +105,7 @@
             display: flex;
             justify-content: space-between;
             padding: 1rem;
+            cursor: pointer;
         }
         .device:hover{
             background-color: var(--ui-item-bg-hover);
@@ -117,15 +119,43 @@
             justify-self: flex-end;
             text-align: right;
         }
+        .device-selected{
+            background-color: var(--ui-item-selected);
+        }
         .device-offline{
             color: var(--red);
         }
         .device-online{
             color:var(--green);
         }
+        .device-new{
+            background-color: var(--ui-item-bg-hover);
+            animation-name: newDevicePulse;
+            animation-duration: .5s;
+            animation-iteration-count: 3;
+        }
+        .device-new .device-name{
+            border-bottom: 1px solid var(--black);
+        }
+        @keyframes newDevicePulse {
+            0% {
+                background-color: var(--ui-item-bg-hover);
+            }
+            50% {
+                background-color: var(--green);
+            }
+            100% {
+                background-color: var(--ui-item-bg-hover);
+            }
+        }
+
 
         .device-detail{
             flex:5;
+        }
+        .detail-content{
+            height: 95%;
+            overflow: auto;
         }
         .section-header{
             display: flex;
@@ -133,6 +163,19 @@
             text-align: center;
             box-shadow: 0 2px 2px -2px rgba(0,0,0,.4);
             padding: 10px;
+        }
+        .sub-heading{
+            background-color: #d4d4d4;
+            font-weight: 700;
+            justify-content: space-between;
+            padding-left: 3rem;
+            padding-right: 3rem;
+        }
+        .sub-heading:hover{
+            background-color: var(--ui-item-bg-hover);
+        }
+        .section-body{
+            border-bottom: 1px solid var(--ui-item-bg-hover);
         }
         .logout{
             text-decoration: none;
@@ -150,6 +193,21 @@
         .section-title{
             flex:3;
         }
+        button{
+            outline:none;
+            padding:.2rem;
+            background-repeat:no-repeat;
+            border: none;
+            cursor: pointer;
+            border: 1px solid var(--black);
+            background-color: var(--ui-item-bg);
+        }
+        button:hover{
+            background-color: var(--ui-item-bg-hover);   
+        }
+        body-hidden{
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -164,42 +222,78 @@
     </nav>
     <div class="content">
         <div class="devices-list-container ui-item">
-            <div class="section-header"><div class="section-title">Registered Devices</div><div class="section-action"><i class="fas fa-plus" id="add-device"></i></div></div>
+            <div class="section-header"><div class="section-title"><%= username %>'s Devices</div><div class="section-action"><i class="fas fa-plus" id="add-device"></i></div></div>
             <div class="devices-list">
                 <ul>
-                    <li>
-                        <div class="device">
-                            <div class="device-name">
-                                Device 1
-                            </div>
-                            <div class="device-status device-online">
-                                Online
-                            </div>
-                        </div>
-                    </li>
-                    <li>
-                        <div class="device device-new">
-                            <div class="device-name">
-                                <input type="text" placeholder="Device Name" autofocus></input>
-                            </div>
-                            <div class="device-status device-online">
-                                Online
-                            </div>
-                        </div>
-                    </li>
                 </ul>
             </div> 
         </div>
         <div class="device-detail ui-item">
             <div class="section-header">Device Detail</div>
+            <div class="detail-content">
+
+            </div>
         </div>
     </div>
     <script>
+        refreshDevices();
         $('#add-device').click(function (e) { 
             $(this).removeClass('fa-plus')
             $(this).addClass('fa-spinner')
             $(this).addClass('fa-spin')
+            $.post("/ajax/getAddDeviceForm",
+                function (li, textStatus, jqXHR) {
+                    $('.devices-list ul').append(li);
+                    $('#add-device').off(); 
+                }
+            );
         });
+        $('.devices-list').on('click', 'ul li', function (e){
+            if($(this).attr('id') === 'new-device')
+                return
+            e.preventDefault();
+            $('.device-selected').removeClass('device-selected');
+            $(this).addClass('device-selected')
+            //$('.device-detail .section-header').html($(this).find('.device-name').html() + ' Detail')
+            var device_id = $(this).find('.device').attr('id').split('-')[1];
+            console.log(device_id)
+            $.post("/ajax/getDeviceDetail",{
+                    device_id: device_id,
+                },
+                function (data, textStatus, jqXHR) {
+                    $('.detail-content').html(data);
+                }
+            );
+        })
+        $(document).on('click', '.sub-heading', function(e){
+            if($(this).next('.section-body').is(':visible')){
+                console.log($(this).find('.fas'))
+                $(this).find('.fas').removeClass('fa-caret-down')
+                $(this).find('.fas').addClass('fa-caret-left')
+                $(this).next('.section-body').slideUp(100)
+            }else{
+                $(this).find('.fas').removeClass('fa-caret-left')
+                $(this).find('.fas').addClass('fa-caret-down')
+                $(this).next('.section-body').slideDown(100)
+            }
+        })
+        function refreshDevices(){
+            $.post("/ajax/getDevices",
+                function (deviceList, textStatus, jqXHR) {
+                    $('.devices-list ul').html('');
+                    deviceList.forEach(data => {
+                        $('.devices-list ul').append('<span style="display:none;">d-'+data.device_id+'</span>')
+                    })
+                    deviceList.forEach(devID => {
+                        $.post("/ajax/getDeviceDisplay", devID,
+                            function (data, textStatus, jqXHR) {
+                                $('.devices-list ul').html($('.devices-list ul').html().replace(new RegExp('<span style="display:none;">d-'+devID.device_id+'</span>', 'g'), data))
+                            }
+                        );
+                    });
+                }
+            );
+        }
     </script>
 </body>
 </html>

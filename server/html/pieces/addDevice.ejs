@@ -1,0 +1,48 @@
+<li id="new-device">
+    <div class="device device-new">
+        <div class="device-name">
+            <input id="new-device-name" type="text" placeholder="Device Name" autofocus></input>
+        </div>
+        <div class="device-status device-online">
+            <button id="add-device-btn">Add <i class="fas fa-plus"></i></button>
+        </div>
+    </div>
+    <script>
+        $('#add-device-btn').click((e) =>{
+            e.preventDefault();
+            var device_name = $('#new-device-name').val()
+            if(!device_name.length > 0){
+                alert("Please enter a name for the new device!")
+                return
+            }
+            $.post("/ajax/addDevice", {
+                device_name: device_name
+            },
+                function (success, textStatus, jqXHR) {
+                    if(success){
+                        $('#new-device').remove();
+
+                        $('#add-device').removeClass('fa-spinner')
+                        $('#add-device').removeClass('fa-spin')
+                        $('#add-device').addClass('fa-plus')
+                        refreshDevices();
+                        $('#add-device').click(function (e) { 
+                            $(this).removeClass('fa-plus')
+                            $(this).addClass('fa-spinner')
+                            $(this).addClass('fa-spin')
+                            $.post("/ajax/getAddDeviceForm",
+                                function (li, textStatus, jqXHR) {
+                                    $('.devices-list ul').append(li);
+                                    $('#add-device').off();
+                                }
+                            );
+                        });
+                    }
+                    else{
+                        alert("Error adding device")
+                    }
+                }
+            );
+        })
+    </script>
+</li>

@@ -18,6 +18,9 @@ db.connect((err) => {
     console.info("[Server] Database Connection Established")
 });
 
+app.use(express.json());       // to support JSON-encoded bodies
+app.use(express.urlencoded()); // to support URL-encoded bodies
+
 /*
     HTTP Webserver
 */
@@ -92,7 +95,7 @@ app.get('/login', (req, res) => {
                     var password_hash = crypto.createHmac('sha512', secret_result[0]['password_salt']).update(password).digest('base64')
                     if(user_password === password_hash){
                         var token = uuidv4()
-                        var token_iqs = "INSERT INTO auth_token(token, user_id) VALUES (?,?)"
+                        var token_iqs = "INSERT INTO auth_token(token, ref_id, token_type) VALUES (?,?, (SELECT token_type_id FROM lut_token_types WHERE token_type_desc = 'user'))"
                         db.query(token_iqs, [token, user_id], (err, res3) => {
                             res.cookie('token', token, {
                                 maxAge: 24 * 60 * 60 * 1000 // 1 Day login
@@ -179,12 +182,78 @@ app.get('/register', (req, res) => {
         }
     }
 })
-app.post('/ajax/getAddDeviceForm', (req, res) => {
-    res.sendFile('./html/form/')
+app.post('/ajax/getAddDeviceForm', require_token, (req, res) => {
+    res.sendFile('./html/pieces/addDevice.ejs', { root: __dirname })
 })
-app.post('/ajax/generateDevice', (req, res) => {
-    
-    res.send('Hello?')
+app.post('/ajax/getDevices', require_token, (req, res) => {
+    var token =  req.cookies['token']
+    var userId_sqs = "SELECT user_id FROM auth_token LEFT JOIN auth_user ON auth_user.user_id = auth_token.ref_id WHERE token_type = (SELECT token_type_id FROM lut_token_types WHERE token_type_desc = 'user' AND active = true AND token = ?)"
+    db.query(userId_sqs, [token], (err, result) => {
+        var owner_id = result[0].user_id
+        var devices_sqs = "SELECT device_id FROM device WHERE owner_id = ?"
+        db.query(devices_sqs, [owner_id], (err, result) => {
+            res.send(result)
+        })
+    })
+})
+app.post('/ajax/getDeviceDisplay', require_token, (req, res) => {
+    var device_id = req.body.device_id
+    var device_info_sqs = "SELECT * FROM device WHERE device_id = ?"
+    db.query(device_info_sqs, [device_id], (err, result) => {
+        res.render('pieces/device', {
+            device_id: result[0].device_id,
+            device_name: result[0].device_name, 
+            device_status : "Online"
+        })
+    })
+});
+
+app.post('/ajax/addDevice', require_token, (req, res) => {
+    var device_name = req.body.device_name
+    var token =  req.cookies['token']
+    var userId_sqs = "SELECT user_id FROM auth_token LEFT JOIN auth_user ON auth_user.user_id = auth_token.ref_id WHERE token_type = (SELECT token_type_id FROM lut_token_types WHERE token_type_desc = 'user' AND active = true AND token = ?)"
+    db.query(userId_sqs, [token], (err, result) => {
+        var owner_id = result[0].user_id
+        var device_iqs = "INSERT INTO device(device_name, owner_id) VALUES (?,?)"
+        db.query(device_iqs, [device_name, owner_id], (err, result) => {
+            res.send(result.affectedRows > 0)
+        })
+    })
+})
+
+app.post('/ajax/getDeviceDetail', require_token, (req, res) => {
+    var device_id = req.body.device_id
+    var token =  req.cookies['token']
+    var userId_sqs = "SELECT user_id FROM auth_token LEFT JOIN auth_user ON auth_user.user_id = auth_token.ref_id WHERE token_type = (SELECT token_type_id FROM lut_token_types WHERE token_type_desc = 'user' AND active = true AND token = ?)"
+    db.query(userId_sqs, [token], (err, result) => {
+        var user_id = result[0].user_id
+        var link_query_sqs = "SELECT link_id FROM device_link A WHERE A.user_id = ? AND A.device_id = ? AND linked = true"
+        db.query(link_query_sqs, [user_id, device_id], (err, result) => {
+            var linked = false
+            //If Device IS LINKED
+            if(result && result.length > 0){
+                linked = true
+                link_code = result[0].link_code
+                res.render('pieces/deviceDetail', {
+                    linked: linked,
+                    link_code: link_code
+                })
+                return
+            //If Device IS NOT LINKED
+            } else {
+                linked = false
+                link_code = Math.floor(100000 + Math.random() * 900000)
+                var link_query_iqs = "INSERT INTO device_link(device_id, user_id, link_code) VALUES (?,?,?)"
+                db.query(link_query_iqs, [device_id, user_id, link_code], (err, result) => {
+                    res.render('pieces/deviceDetail', {
+                        linked: linked,
+                        link_code: link_code
+                    })
+                    return
+                })
+            }
+        })
+    })
 })
 
 app.use('/css', express.static(__dirname + '/html/css'))
