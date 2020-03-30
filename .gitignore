@@ -1,2 +1,4 @@
 server/node_modules
 server/config/default.json
+client/node_modules
+client/config/default.json

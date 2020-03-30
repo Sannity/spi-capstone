@@ -14,6 +14,7 @@
             --ui-item-bg-hover: #e0e0e0;
             --ui-item-shadow: 4px 4px 3px 2px #4242424f;
             --ui-item-selected: var(--graiant-start);
+            --device-loading: #2a2a2a;
             --red: #ed001c;
             --black: #2a2a2a;
             --green: #64bb00;
@@ -127,6 +128,9 @@
         }
         .device-online{
             color:var(--green);
+        }
+        .device-loading{
+            color:var(--device-loading)
         }
         .device-new{
             background-color: var(--ui-item-bg-hover);
@@ -293,6 +297,27 @@
                     });
                 }
             );
+        }
+    </script>
+    <script>
+        var ws = new WebSocket('ws://<%= ws_remote %>?api_key=<%= api_key %>&is_webclient=true&token=<%= token %>')
+        ws.onmessage = (event) => {
+            var message = JSON.parse(event.data)
+            if(message['meta']['type'] == 'update'){
+                message['data']['devices'].forEach((device_update, i) => {
+                    if(!device_update)
+                        return
+                    //Device Status (Online/Offline)
+                    if(device_update.status == "Online")
+                        $('#device-'+i).find('.device-status').html('<i class="fas fa-circle"></i>').removeClass('device-loading').removeClass('device-offline').addClass('device-online')
+                    else
+                        $('#device-'+i).find('.device-status').html('<i class="far fa-circle"></i>').removeClass('device-loading').removeClass('device-online').addClass('device-offline')
+                    var device_id = device_update['device_id']
+                    if(device_id){
+                        console.log(device_id)
+                    }
+                })
+            }
         }
     </script>
 </body>

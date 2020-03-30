@@ -1,4 +1,5 @@
 const express = require('express')
+const http = require('http')
 const app = express()
 const cookieParser = require('cookie-parser')
 app.use(cookieParser())
@@ -7,7 +8,7 @@ const path = require('path');
 const WebSocket = require('ws')
 const mysql = require('mysql')
 const url = require('url')
-const wss = new WebSocket.Server({ port: 8080 })
+const wss = new WebSocket.Server({ noServer: true })
 const config = require('config')
 const crypto = require('crypto')
 const uuidv4 = require('uuid/v4')
@@ -21,6 +22,17 @@ db.connect((err) => {
 app.use(express.json());       // to support JSON-encoded bodies
 app.use(express.urlencoded()); // to support URL-encoded bodies
 
+const server_name = "[Server] "
+server_error = (message) => {
+    console.error(server_name + message)
+    process.exit(-1)
+}
+server_warn = (message) => {
+    console.log(server_name + message)
+}
+server_msg = (message) => {
+    console.log(server_name + message)
+}
 /*
     HTTP Webserver
 */
@@ -51,10 +63,21 @@ function require_token(req, res, next) {
 app.get('/', require_token, (req, res) => {
     var username_sqs = "SELECT * FROM auth_user A LEFT JOIN auth_token B ON B.ref_id = A.user_id WHERE token = ?"
     db.query(username_sqs, [req.cookies['token']], (err, username_result) => {
-        res.render('index', 
-            {
-                username: username_result[0]['username']
+        var token =  req.cookies['token']
+        var userId_sqs = "SELECT user_id FROM auth_token LEFT JOIN auth_user ON auth_user.user_id = auth_token.ref_id WHERE token_type = (SELECT token_type_id FROM lut_token_types WHERE token_type_desc = 'user' AND active = true AND token = ?)"
+        db.query(userId_sqs, [token], (err, result) => {
+            var owner_id = result[0].user_id
+            var devices_sqs = "SELECT device_id FROM device WHERE owner_id = ?"
+            db.query(devices_sqs, [owner_id], (err, result) => {
+                res.render('index', 
+                {
+                    username: username_result[0]['username'],
+                    ws_remote: config.get("self_server.address")+":"+config.get("self_server.ws_port"),
+                    api_key: config.get('api_key'),
+                    token: token
+                })
             })
+        })
     })
 })
 app.get('/login', (req, res) => {
@@ -145,7 +168,6 @@ app.get('/register', (req, res) => {
         if(!query['username'] || !query['password'] || !query['email'])
         res.sendFile('./html/register.html', { root: __dirname })
         else{
-            console.log(query)
             var username = query['username']
 
             var user_sqs = "SELECT * FROM auth_user WHERE username = ?"
@@ -223,84 +245,221 @@ app.post('/ajax/addDevice', require_token, (req, res) => {
 
 app.post('/ajax/getDeviceDetail', require_token, (req, res) => {
     var device_id = req.body.device_id
-    var token =  req.cookies['token']
-    var userId_sqs = "SELECT user_id FROM auth_token LEFT JOIN auth_user ON auth_user.user_id = auth_token.ref_id WHERE token_type = (SELECT token_type_id FROM lut_token_types WHERE token_type_desc = 'user' AND active = true AND token = ?)"
-    db.query(userId_sqs, [token], (err, result) => {
-        var user_id = result[0].user_id
-        var link_query_sqs = "SELECT link_id FROM device_link A WHERE A.user_id = ? AND A.device_id = ? AND linked = true"
-        db.query(link_query_sqs, [user_id, device_id], (err, result) => {
-            var linked = false
-            //If Device IS LINKED
-            if(result && result.length > 0){
-                linked = true
-                link_code = result[0].link_code
+    var link_query_sqs = "SELECT * FROM auth_token LEFT WHERE token_type=(SELECT token_type_id FROM lut_token_types WHERE token_type_desc = 'device') AND active = true AND device_id = ?"
+    db.query(link_query_sqs, [device_id], (err, result) => {
+        var linked = false
+        //If Device IS LINKED
+        if(result && result.length > 0){
+            var user_id = result[0].device_id
+            linked = true
+            res.render('pieces/deviceDetail', {
+                linked: linked,
+                link_code: ""
+            })
+            return
+        //If Device IS NOT LINKED
+        } else {
+            linked = false
+            link_code = Math.floor(100000 + Math.random() * 900000)
+            var link_query_iqs = "INSERT INTO device_link(device_id, user_id, link_code) VALUES (?,?,?)"
+            db.query(link_query_iqs, [device_id, user_id, link_code], (err, result) => {
                 res.render('pieces/deviceDetail', {
                     linked: linked,
                     link_code: link_code
                 })
                 return
-            //If Device IS NOT LINKED
-            } else {
-                linked = false
-                link_code = Math.floor(100000 + Math.random() * 900000)
-                var link_query_iqs = "INSERT INTO device_link(device_id, user_id, link_code) VALUES (?,?,?)"
-                db.query(link_query_iqs, [device_id, user_id, link_code], (err, result) => {
-                    res.render('pieces/deviceDetail', {
-                        linked: linked,
-                        link_code: link_code
-                    })
-                    return
-                })
-            }
-        })
+            })
+        }
     })
 })
 
 app.use('/css', express.static(__dirname + '/html/css'))
 
-app.listen('8000', () => console.log('[Server] Web Server Started'))
+var webserver = http.createServer(app).listen('8000', () => server_msg('Web Server Started'))
+
+webserver.on('upgrade', function upgrade(request, socket, head) {
+    wss.handleUpgrade(request, socket, head, function done(ws) {
+        wss.emit('connection', ws, request);
+    });
+});
 
 /*
     Websocket Server
 */
+device_update_buffer = {}
+class DataUpdate{
+    constructor(source_id, data){
+        this.data_source = source_id
+        this.rand = data.rand
+    }
+    buffer(){
+        if(!device_update_buffer[this.data_source])
+            device_update_buffer[this.data_source] = []
+        device_update_buffer[this.data_source].push(this)
+    }
+}
+
+class ClientMessage{
+    constructor(message){
+        this.message = JSON.parse(message)    
+    }
+    process(calling_ws){
+        var query_result = { meta: {}, data:{} }
+        if(this.message['meta']['type'] == 'link'){
+            var link_code =  this.message['data']['code']
+            var link_code_sqs = "SELECT * FROM device_link WHERE link_code = ? AND linked = false"
+            db.query(link_code_sqs, [link_code], (err, link_code_sresult) =>{
+                if(err || link_code_sresult.length <= 0){
+                    query_result['meta']['type'] = "link_result"
+                    query_result['data']['success'] = false
+                    query_result['data']['message'] = "Problem Finding Link Code"
+                    calling_ws.send(JSON.stringify(query_result))
+                    return
+                }
+                var device_id = link_code_sresult[0]['device_id']
+                var token = uuidv4()
+                var device_link_dqs = "DELETE FROM device_link WHERE link_code = ?"
+                db.query(device_link_dqs, [link_code], (err, link_delete_result) => {
+                    var token_iqs = "INSERT INTO auth_token(token, ref_id, token_type) VALUES (?,?, (SELECT token_type_id FROM lut_token_types WHERE token_type_desc = 'device'))"
+                    db.query(token_iqs, [token, device_id], (err, token_result) => {
+                        query_result['meta']['type'] = "link_result"
+                        query_result['data']['success'] = false
+                        if(err){
+                            query_result['data']['message'] = "Problem Getting Token"
+                            calling_ws.send(JSON.stringify(query_result))
+                        }   
+                        else if (token_result.affectedRows <= 0){
+                            query_result['data']['message'] = "Problem Getting Token"
+                            calling_ws.send(JSON.stringify(query_result))
+                        }   
+                        else {
+                            var device_sqs = "SELECT * FROM device WHERE device_id = ?"
+                            db.query(device_sqs, [device_id], (err, device_result) => {
+                                calling_ws.device_id = device_id;
+                                server_msg("Device "+query_result['data']['device_name']+" has joined")
+                                query_result['data']['success'] = true
+                                query_result['data']['token'] = token
+                                query_result['data']['device_name'] = device_result[0]['device_name']
+                                calling_ws.send(JSON.stringify(query_result))
+                            })
+                        }
+                    })
+                })
+            })
+        } else{
+            var response = {
+                meta:{
+                    type: "error"
+                },
+                data: {
+
+                }
+            }
+            var token_valid_sqs = "SELECT * FROM auth_token WHERE token = ? AND active = true"
+            var token = this.message['meta']['token']
+            db.query(token_valid_sqs, [token], (err, token_result) => {
+                if(err || !token_result || token_result.length <= 0){
+                    server_warn("Problem w/ Token")
+                    response.meta.type = "error"
+                    response.data['message'] = "Problem w/ Token"
+                    calling_ws.send(JSON.stringify(response))
+                    calling_ws.terminate()
+                    return
+                }else{
+                    var device_id = token_result[0]['ref_id']
+                    calling_ws.device_id = device_id
+                    calling_ws.isAuthed = true
+                    switch (this.message.meta.type) {
+                        case 'data_update':
+                            (new DataUpdate(calling_ws.device_id, this.message.data)).buffer();
+                            break;
+                        default:
+                            break;
+                    }
+                    return
+                }
+            })
+        }
+        return
+    }
+}
+
+function heartbeat(){
+    this.isAlive = true
+}
+
+
 wss.on('connection', (ws, req) => {
     //Parse URL and get query element
     var url_parts = url.parse(req.url, true)
     var query = url_parts.query
-
+    
     //Check for API Key in query
     if (query['api_key'] !== config.get('api_key'))
         ws.close(4000, "Bad API key") //Drop any connection with the wrong API KEY
 
-    /*
-        Auth Process Begin
-    */
-    var authenticated = false
-
-    //Check for token in query, this will indicate they are already logged in
-    if (query['token'] && !authenticated)
-        authenticated = validateToken(query['token'])
-    //If that didnt work check for login credentials
-    if (query['username'] && query['password'] && !authenticated)
-        authenticated = validateUser()
-    if (!authenticated)
-        ws.close(4001, "Not Authorized")
-
+    if(query['is_webclient'] && query['token']){
+        server_msg("Web Client Connecting")
+        var clients_sqs = "SELECT device_id FROM device WHERE owner_id = (SELECT ref_id FROM auth_token WHERE token= ?)"
+        db.query(clients_sqs, [query['token']], (err, clients_result) => {
+            var clients = clients_result.map(el => el.device_id)
+            ws.isWebServer = true;
+            ws.clients = clients
+            ws.isAlive = true;
+            ws.on('pong', heartbeat)
+        })
+        return
+    } else {
+        ws.on('message', function(message){
+            (new ClientMessage(message)).process(this)
+            return
+        })
+    }
+    //KeepAlive set for client
+    ws.isAlive = true;
+    ws.on('pong', heartbeat)
 })
 
-/**
- * Checks if token is valid
- * @param {string} token 
- */
-function validateToken(token) {
-    return false;
-}
+//Set Keepalive heartbeat
+const keepAlive = setInterval(function ping() {
+    wss.clients.forEach(function each(ws){
+        if(ws.isAlive === false) {
+            return ws.terminate();
+        }
 
-/**
- * Check if username/password combination is okay
- * @param {string} username 
- * @param {string} password 
- */
-function validateUser(username, password) {
-    return false;
-}
+        ws.isAlive = false;
+        ws.ping()
+    })
+}, 30000)
+
+//Set Webserver update
+const webserverUpdate = setInterval(function ping(){
+    wss.clients.forEach(function each(ws){
+        if(ws.isWebServer){
+            var update = {
+                meta:{
+                    type:"update"
+                },
+                data:{
+                    devices: [
+
+                    ]
+                }
+            }
+            ws.clients.forEach((i) => {
+                update['data']['devices'][i] = {}
+                update['data']['devices'][i]['status'] = 'Offline'
+            })
+            wss.clients.forEach((ws2)=>{
+                if(ws.clients.includes(ws2.device_id)){
+                    update['data']['devices'][ws2.device_id]['device_id'] = ws2.device_id
+                    update['data']['devices'][ws2.device_id]['update_buffer'] = device_update_buffer[ws2.device_id]
+                    device_update_buffer[ws2.device_id] = []
+                    if(ws2.isAlive)
+                        update['data']['devices'][ws2.device_id]['status'] = 'Online'
+                }
+            })
+            ws.send(JSON.stringify(update))
+        }
+    })
+}, 3000)
