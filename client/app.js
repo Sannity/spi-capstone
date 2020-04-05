@@ -1,12 +1,10 @@
 const WebSocket = require('ws')
 var config = require('config')
-const http = require('http')
 const fs = require('fs')
 const commandLineArgs = require('command-line-args')
-const readline = require('readline').createInterface({
-    input: process.stdin,
-    output: process.stdout
-})
+const NetworkSpeed = require('network-speed');
+const testNetworkSpeed = new NetworkSpeed();
+
 const client_name = "["+(config.has('device_name') ? config.get('device_name') : 'Unknown Device')+"] "
 
 const optionDefinitions = [
@@ -47,6 +45,8 @@ class ServerMessage{
     }
 }
 
+var connection_speed = undefined;
+
 function connect(){
     console_msg("Connecting to server on "+options['remote_ip']+':'+options['remote_port'])
     ws = new WebSocket('ws://'+options['remote_ip']+':'+options['remote_port']+'?api_key='+config.get('api_key'))
@@ -75,12 +75,22 @@ function connect(){
                         token: config.get('token')
                     },
                     data: {
-                        rand: Math.random() * 100
+                        
                     }
+                }
+                if(connection_speed != undefined){
+                    dataUpdate.data['connection_speed'] = connection_speed;
+                    connection_speed = undefined;
                 }
                 ws.send(JSON.stringify(dataUpdate))
             }, 3000)
         }
+        ws.clientNetworkSpeed = setInterval(function(){
+            //TODO: MAKE SURE THIS ISNT CAUSING ISSUES
+            testNetworkSpeed.checkDownloadSpeed('http://'+options['remote_ip']+':'+options['remote_port']+'/api/nwSpeed', 10000000).then(function(speed){
+                connection_speed = speed.mbps;
+            });
+        }, 1000 * 10)
     })
     ws.on('ping', heartbeat)
     ws.on('open', heartbeat)
