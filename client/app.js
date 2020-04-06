@@ -5,6 +5,9 @@ const commandLineArgs = require('command-line-args')
 const NetworkSpeed = require('network-speed');
 const testNetworkSpeed = new NetworkSpeed();
 
+var protocols = require('./resources/protocols.json')
+var tcp_ports = require('./resources/tcp_ports.json')
+
 const client_name = "["+(config.has('device_name') ? config.get('device_name') : 'Unknown Device')+"] "
 
 const optionDefinitions = [
@@ -44,6 +47,74 @@ class ServerMessage{
         }
     }
 }
+Number.prototype.pad = function(size) {
+    var s = String(this);
+    while (s.length < (size || 2)) {s = "0" + s;}
+    return s;
+}
+
+var updates = []
+
+class ServerPacket{
+    constructor(packet){
+        this.packet = packet
+        this.info = {}
+    }
+    process(){
+        var filtered = true;
+        if(this.packet.link_type == "LINKTYPE_ETHERNET"){
+            this.info['eth'] = {}
+            this.info.eth['dhost'] = this.packet.payload.dhost.addr.map((e) => {
+                var hex = e.toString(16)
+                if(hex.length == 1)
+                    hex = '0'+hex
+                return hex
+            }).join(':')
+            this.info.eth['shost'] = this.packet.payload.shost.addr.map((e) => {
+                var hex = e.toString(16)
+                if(hex.length == 1)
+                    hex = '0'+hex
+                return hex
+            }).join(':')
+            switch(this.packet.payload.payload.constructor.name){
+                case 'IPv4':
+                    this.info.eth['payload_type'] = 'IPv4'
+                    this.info['ip'] = {}
+                    this.info.ip['saddr'] = this.packet.payload.payload.saddr.addr.join('.')
+                    this.info.ip['daddr'] = this.packet.payload.payload.daddr.addr.join('.')
+                    this.info['protocol'] = protocols[protocols.findIndex((el) => el.Decimal == this.packet.payload.payload.protocol)].Keyword
+                    
+                    if(this.info['protocol'] == "TCP"){
+                        var tcp_protocol, tcp_port
+                        tcp_protocol = tcp_ports.findIndex((el) => el.port == this.packet.payload.payload.payload.sport)
+                        if(tcp_protocol == -1){
+                            tcp_protocol = tcp_ports.findIndex((el) => el.port == this.packet.payload.payload.payload.dport)
+                            if(tcp_protocol == -1)
+                                tcp_protocol = 'Unknown'
+                            else{
+                                tcp_port = tcp_ports[tcp_protocol].port
+                                tcp_protocol = tcp_ports[tcp_protocol].description
+                            }
+                        }else{
+                            tcp_port = tcp_ports[tcp_protocol].port
+                            tcp_protocol = tcp_ports[tcp_protocol].description
+                        }
+                        this.info['protocol'] = tcp_protocol
+                        //Attempt to Filter out traffic that belongs to this program
+                        if((this.info.ip.saddr == options['remote_ip'] || this.info.ip.daddr == options['remote_ip']) && tcp_port == options['remote_port'])
+                            filtered = false
+                    }
+                    break
+                case 'Arp':
+                    break
+            }
+        }else{
+            console.error('UNKNOWN PACKET, CANNOT READ');
+        }
+        if(filtered)
+            updates.push(this.info)
+    }
+}
 
 var connection_speed = undefined;
 
@@ -68,6 +139,12 @@ function connect(){
             ws.send(JSON.stringify(link_query))
         }
         if(config.get('token')){
+            var pcap = require('pcap'),
+                pcap_session = pcap.createSession();
+            pcap_session.on('packet', function (raw_packet) {
+                (new ServerPacket(pcap.decode.packet(raw_packet))).process();
+            });
+
             ws.dataUpdate = setInterval(function(){
                 var dataUpdate = {
                     meta: {
@@ -82,6 +159,8 @@ function connect(){
                     dataUpdate.data['connection_speed'] = connection_speed;
                     connection_speed = undefined;
                 }
+                dataUpdate.data['updates'] = updates
+                updates = []
                 ws.send(JSON.stringify(dataUpdate))
             }, 3000)
         }
