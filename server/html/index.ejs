@@ -5,25 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
     <script src="https://kit.fontawesome.com/139f91225e.js" crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="css/site.css">
+    <script src="https://cdn.jsdelivr.net/npm/google-palette@1.1.0/palette.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.min.js" integrity="sha256-R4pqcOYV8lt7snxMQO/HSbVCFRPMdrhAFMH+vr9giYI=" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.min.css" integrity="sha256-aa0xaJgmK/X74WM224KMQeNQC2xYKwlAt08oZqjeF0E=" crossorigin="anonymous" />
+    <!-- <link rel="stylesheet" href="css/site.css"> -->
     <title>Network Monitor</title>
+    <%- include ('./css/site.css.ejs', {darkMode: false}) -%>
     <style>
-        :root{
-            --navbar-height: 60px;
-            --ui-item-bg: #FFFFFF;
-            --ui-item-bg-hover: #e0e0e0;
-            --ui-item-shadow: 4px 4px 3px 2px #4242424f;
-            --ui-item-selected: var(--graiant-start);
-            --device-loading: #2a2a2a;
-            --red: #ed001c;
-            --black: #2a2a2a;
-            --green: #64bb00;
-        }
         body, html{
             padding: 0;
             margin: 0;
             height: 100vh;
-            color: var(--black)
+            color: var(--text-color)
         }
         body{
             display: flex;
@@ -37,7 +30,7 @@
             justify-content: space-between;
             align-items: center;
             height: var(--navbar-height);
-            box-shadow: 0 2px 2px -2px rgba(0,0,0,.4);
+            box-shadow: 0 2px 2px -2px var(--black);
             padding-left:1rem;
             padding-right:1rem;
         }
@@ -114,6 +107,9 @@
         .device-name{
             flex:1;
             text-align: left;
+            text-overflow: ellipsis;
+            overflow: hidden;
+            white-space: nowrap;
         }
         .device-status{
             flex:1;
@@ -156,10 +152,26 @@
 
         .device-detail{
             flex:5;
+            display: flex;
+            flex-direction: column;
         }
         .detail-content{
-            height: 95%;
+            height: inherit;
             overflow: auto;
+            flex: 1;
+            display: flex;
+        }
+        .other-data{
+            flex: 1;
+        }
+        .protocols{
+            border-left: 1px solid var(--sub-heading-color);
+        }
+        .protocol-header{
+            width: 100%;
+            text-align: center;
+            padding: 5px;
+            background-color: var(--sub-heading-color);
         }
         .section-header{
             display: flex;
@@ -169,11 +181,13 @@
             padding: 10px;
         }
         .sub-heading{
-            background-color: #d4d4d4;
+            background-color: var(--sub-heading-color);
+            color: var(--text-color);
             font-weight: 700;
             justify-content: space-between;
             padding-left: 3rem;
             padding-right: 3rem;
+            cursor: pointer;
         }
         .sub-heading:hover{
             background-color: var(--ui-item-bg-hover);
@@ -184,7 +198,7 @@
         .logout{
             text-decoration: none;
             color:inherit;
-            border: 1px solid var(--black);
+            border: 1px solid var(--accent);
             padding-left: 1rem;
             padding-right: 1rem;
             padding-top: .5rem;
@@ -197,14 +211,61 @@
         .section-title{
             flex:3;
         }
+        .data-rate{
+            width: 700px !important;
+        }
+        .row{
+            display: flex;
+            flex-wrap: wrap;
+        }
+        .row div{
+            flex: 1;
+            text-align: right;
+        }
+        .common-ip-table{
+            display: flex;
+            text-align: left;
+            flex-direction: column;
+            min-width: 25vw;
+        }
+        .common-ip-table thead{
+            height: 40px;
+            line-height: 40px;
+            width: 100%;
+            background-color: #d0c6e4;
+        }
+        .common-ip-table tbody{
+            width: 100%;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        .common-ip-table thead tr{
+            display: flex;
+            height: inherit;
+        }
+        .common-ip-table tbody tr{
+            display: flex;
+            height: inherit;
+        }
+        .common-ip-table tbody tr td{
+            flex: 1;
+            padding-left: 10px;
+            padding-bottom: 3px;
+            padding-top: 3px;
+        }
+        .common-ip-table thead tr th{
+            flex: 1;
+            padding-left: 10px;
+        }
         button{
             outline:none;
             padding:.2rem;
             background-repeat:no-repeat;
             border: none;
             cursor: pointer;
-            border: 1px solid var(--black);
+            border: 1px solid var(--accent);
             background-color: var(--ui-item-bg);
+            color: var(--text-color)
         }
         button:hover{
             background-color: var(--ui-item-bg-hover);   
@@ -215,15 +276,7 @@
     </style>
 </head>
 <body>
-    <nav class="nav-menu">
-        <ul class="left-nav">
-            <li class="site-title"><a href="/">Network Monitor</a></li>
-        </ul>
-        <ul class="right-nav">
-            <li>Welcome, <%= username %></li>
-            <li><a class="logout" href="/logout">Logout</a></li>
-        </ul>
-    </nav>
+    <%- include ('./pieces/header.ejs') -%>
     <div class="content">
         <div class="devices-list-container ui-item">
             <div class="section-header"><div class="section-title"><%= username %>'s Devices</div><div class="section-action"><i class="fas fa-plus" id="add-device"></i></div></div>
@@ -237,9 +290,124 @@
             <div class="detail-content">
 
             </div>
+            <script>
+                class DataRateChart{
+                    constructor(selector){
+                        this.chartSize = 10
+                        this.selector = selector
+                        this.datas = []
+                        this.label = 'Mbps'
+                        this.options = {
+                            responsive: true,
+                            scales: {
+                                yAxes: [{
+                                    display: true,
+                                    ticks: {
+                                        suggestedMin: 0,
+                                    }
+                                }]
+                            }
+                        }
+                    }
+                    update(){
+                        this.innerChart.update({
+                            duration: 800,
+                            easing: 'easeOutExpo'
+                        })
+                    }
+                    generate(){
+                        this.innerChart = new Chart($(this.selector), {
+                            type: 'line',
+                            data: this.getData(),
+                            options: this.options,
+                        })
+                    }
+                    addData(data){
+                        if(this.datas.length >= this.chartSize)
+                            this.datas.shift()
+                        this.datas.push(data)
+                        if(this.innerChart)
+                            this.update()
+                    }
+                    getData(){
+                        return {
+                            labels: (new Array(this.chartSize)).fill(''),
+                            datasets: [{
+                                label: this.label,
+                                data: this.datas,
+                                lineTension: 0,
+                            }]
+                        }
+                    }
+                }
+                class ProtocolChart{
+                    constructor(selector){
+                        this.rawdata = []
+                        this.selector = selector
+                        this.total = 0
+                        this.labels = []
+                        this.counts = {}
+                        this.options = {
+                            responsive: true,
+                            cutoutPercentage: 75,
+                        }
+                    }
+                    update(){
+                        this.innerChart.update({
+                            duration: 800,
+                            easing: 'easeOutExpo'
+                        })
+                    }
+                    generate(){
+                        console.log(this.getData())
+                        this.innerChart = new Chart($(this.selector), {
+                            type: 'doughnut',
+                            data: this.getData(),
+                            options: this.options,
+                        })
+                    }
+                    addData(label){
+                        if(!this.labels.includes(label))
+                            this.labels.push(label)
+                        if(!this.counts[label])
+                                this.counts[label] = 1
+                            else
+                                this.counts[label] = this.counts[label] + 1
+                        if(this.innerChart)
+                            this.update()
+                        this.total = this.total + 1
+                        
+                        this.rawdata = []
+                        this.labels.forEach((label)=>{
+                            this.rawdata.push(this.counts[label])
+                        })
+                        
+                        if(this.innerChart){
+                            this.innerChart.data.datasets[0].data = this.rawdata
+                            this.innerChart.data.datasets[0].backgroundColor = palette('tol', this.labels.length).map(function(hex) {
+                                return '#' + hex;
+                            })
+                        }
+                    }
+                    getData(){
+                        console.log(this.rawdata)
+                        return {
+                            labels: this.labels,
+                            datasets: [{
+                                data: this.rawdata,
+                                lineTension: 0,
+                                backgroundColor: palette('tol', this.labels.length).map(function(hex) {
+                                    return '#' + hex;
+                                })
+                            }]
+                        }
+                    }
+                }
+            </script>
         </div>
     </div>
     <script>
+        selected_device = null
         refreshDevices();
         $('#add-device').click(function (e) { 
             $(this).removeClass('fa-plus')
@@ -260,7 +428,7 @@
             $(this).addClass('device-selected')
             //$('.device-detail .section-header').html($(this).find('.device-name').html() + ' Detail')
             var device_id = $(this).find('.device').attr('id').split('-')[1];
-            console.log(device_id)
+            selected_device = device_id
             $.post("/ajax/getDeviceDetail",{
                     device_id: device_id,
                 },
@@ -271,7 +439,6 @@
         })
         $(document).on('click', '.sub-heading', function(e){
             if($(this).next('.section-body').is(':visible')){
-                console.log($(this).find('.fas'))
                 $(this).find('.fas').removeClass('fa-caret-down')
                 $(this).find('.fas').addClass('fa-caret-left')
                 $(this).next('.section-body').slideUp(100)
@@ -304,6 +471,7 @@
         ws.onmessage = (event) => {
             var message = JSON.parse(event.data)
             if(message['meta']['type'] == 'update'){
+                console.log(selected_device)
                 message['data']['devices'].forEach((device_update, i) => {
                     if(!device_update)
                         return
@@ -313,9 +481,30 @@
                     else
                         $('#device-'+i).find('.device-status').html('<i class="far fa-circle"></i>').removeClass('device-loading').removeClass('device-online').addClass('device-offline')
                     var device_id = device_update['device_id']
-                    if(device_id){
-                        console.log(device_id)
-                    }
+                    if(device_id == selected_device)
+                        if(device_update.update_buffer){
+                            device_update.update_buffer.forEach((update, i) => {
+                                if(update.connection_speed)
+                                    if(typeof(drChart) != "undefined")
+                                        drChart.addData(update.connection_speed)
+                                if(update.updates)
+                                    update.updates.forEach((packet, i) => {
+                                        console.log(packet)
+                                        if(typeof(l3_dpChart) != "undefined")
+                                            if(packet['L3_Protocol'])
+                                                l3_dpChart.addData(packet['L3_Protocol'])
+                                        if(typeof(l4_dpChart) != "undefined")
+                                            if(packet['L4_Protocol'])
+                                                l4_dpChart.addData(packet['L4_Protocol'])
+                                        if(typeof(l4_d_dpChart) != "undefined")
+                                            if(packet['L4_Protocol_Detail'])
+                                                l4_d_dpChart.addData(packet['L4_Protocol_Detail'])
+                                        if(typeof(l2_dpChart) != "undefined")
+                                            if(packet['L2_Protocol'])
+                                                l2_dpChart.addData(packet['L2_Protocol'])
+                                    })
+                            })
+                        }
                 })
             }
         }

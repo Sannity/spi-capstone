@@ -1,8 +1,10 @@
 const express = require('express')
+const partials = require('express-partials');
 const http = require('http')
 const app = express()
 const cookieParser = require('cookie-parser')
 app.use(cookieParser())
+app.use(partials())
 
 const path = require('path');
 const WebSocket = require('ws')
@@ -98,7 +100,7 @@ app.get('/login', (req, res) => {
         })
     } else{
         if(!query['username'] || !query['password']){
-            res.sendFile('./html/login.html', { root: __dirname })
+            res.render('login')
         }
         else{
             var username = query['username']
@@ -204,6 +206,9 @@ app.get('/register', (req, res) => {
         }
     }
 })
+app.get('/api/nwSpeed', (req,res) => {
+    res.send(crypto.randomBytes(10000000))
+})
 app.post('/ajax/getAddDeviceForm', require_token, (req, res) => {
     res.sendFile('./html/pieces/addDevice.ejs', { root: __dirname })
 })
@@ -245,7 +250,7 @@ app.post('/ajax/addDevice', require_token, (req, res) => {
 
 app.post('/ajax/getDeviceDetail', require_token, (req, res) => {
     var device_id = req.body.device_id
-    var link_query_sqs = "SELECT * FROM auth_token LEFT WHERE token_type=(SELECT token_type_id FROM lut_token_types WHERE token_type_desc = 'device') AND active = true AND device_id = ?"
+    var link_query_sqs = "SELECT * FROM auth_token WHERE token_type=(SELECT token_type_id FROM lut_token_types WHERE token_type_desc = 'device') AND active = true AND ref_id = ?"
     db.query(link_query_sqs, [device_id], (err, result) => {
         var linked = false
         //If Device IS LINKED
@@ -290,7 +295,8 @@ device_update_buffer = {}
 class DataUpdate{
     constructor(source_id, data){
         this.data_source = source_id
-        this.rand = data.rand
+        this.connection_speed = data.connection_speed
+        this.updates = data.updates
     }
     buffer(){
         if(!device_update_buffer[this.data_source])

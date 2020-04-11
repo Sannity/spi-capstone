@@ -1,25 +1,194 @@
-<div class="link-device-container"> 
-    <% if(linked == true) { %>
-    <p>asdasd</p>
-    <% } else { %>
-        <div class="sub-heading section-header">Link to device<div><i class="fas fa-caret-down"></i></div></div>
-        <div class="section-body">
-            <style>
-                .link-device{
-                    padding: 2rem;
-                    display: flex;
-                    justify-content: center;
-                }
-                .link-device input{
-                    border-bottom: 1px solid var(--black);
-                    margin-right: 2rem;
-                    margin-left: 2rem;
-                }
-            </style>
-            <div class="link-device">
-                <p style="margin: 0;">Provide this code to the client: </p>
-                <input oninput="$(this).val('<%= link_code %>')" value="<%= link_code %>"/>
+
+<% if(linked == true) { %>
+    <div class="other-data">
+        <div class="row">
+            <div class="immutable-subheading">D</div>
+            <div class="data-rate-container">
+                <div class="sub-heading section-header">Data Rates<div><i class="fas fa-caret-down"></i></div></div>
+                <div class="section-body">
+                    <canvas class="data-rate"></canvas>
+                    <script>
+                        var drChart = new DataRateChart('.data-rate')
+                        drChart.generate()
+                    </script>
+                </div>
+            </div>
+            <div>
+                <div class="sub-heading section-header">Common IPs<div><i class="fas fa-caret-down"></i></div></div>
+                <div class="section-body">
+                    <table class="common-ip-table">
+                        <thead>
+                            <tr>
+                                <th>IP</th>
+                                <th>Resolved</th>
+                                <th>Number</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>8.8.8.8</td>
+                                <td>Google</td>
+                                <td>123</td>
+                            </tr>
+                            <tr>
+                                <td>8.8.8.8</td>
+                                <td>Google</td>
+                                <td>123</td>
+                            </tr>
+                            <tr>
+                                <td>8.8.8.8</td>
+                                <td>Google</td>
+                                <td>123</td>
+                            </tr>
+                            <tr>
+                                <td>8.8.8.8</td>
+                                <td>Google</td>
+                                <td>123</td>
+                            </tr>
+                            <tr>
+                                <td>8.8.8.8</td>
+                                <td>Google</td>
+                                <td>123</td>
+                            </tr>
+                            <tr>
+                                <td>8.8.8.8</td>
+                                <td>Google</td>
+                                <td>123</td>
+                            </tr>
+                            <tr>
+                                <td>8.8.8.8</td>
+                                <td>Google</td>
+                                <td>123</td>
+                            </tr>
+                            <tr>
+                                <td>8.8.8.8</td>
+                                <td>Google</td>
+                                <td>123</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
-    <% } %>
-</div>
+    </div>
+    <div class="protocols">
+        <div class="protocol-header">Traffic Types</div>
+        <canvas class="l4-detail-protocol"></canvas>
+        <script>
+            var l4_d_dpChart = new ProtocolChart('.l4-detail-protocol')
+            l4_d_dpChart.generate()
+        </script>
+        <div class="protocol-header">Layer 4 Protocols</div>
+        <canvas class="l4-protocol"></canvas>
+        <script>
+            var l4_dpChart = new ProtocolChart('.l4-protocol')
+            l4_dpChart.generate()
+        </script>
+        <div class="protocol-header">Layer 3 Protocols</div>
+        <canvas class="l3-protocol"></canvas>
+        <script>
+            var l3_dpChart = new ProtocolChart('.l3-protocol')
+            l3_dpChart.generate()
+        </script>
+        <div class="protocol-header">Layer 2 Protocols</div>
+        <canvas class="l2-protocol"></canvas>
+        <script>
+            var l2_dpChart = new ProtocolChart('.l2-protocol')
+            l2_dpChart.generate()
+        </script>
+    </div>
+
+    <!-- <div class="device-data-container">
+        <style>
+            .row{
+                display: flex;
+                flex-direction: row;
+                flex-wrap: wrap;
+                flex-basis: auto;
+            }
+            .col{
+                display: inline-block;
+                flex:1;
+                min-width:0;
+                min-height: 0;
+                height: 100%;
+            }
+            .section-body{
+                max-height:50vh;
+                overflow-y: scroll;
+            }
+            .traffic-table{
+                width:100%;
+                text-align: left;
+            }
+            .traffic-table thead th{
+                padding:1rem;
+                border-bottom: .001rem solid var(--accent);
+                background-color: var(--ui-item-bg-hover);
+            }
+            .button{
+                color: var(--accent);
+                padding: 10px;
+                border: 1px solid var(--accent);
+                margin-top: 5px;
+            }
+        </style>
+        <div class="row">
+            <div class="col">
+                <div class="sub-heading section-header">Data Rates<div><i class="fas fa-caret-down"></i></div></div>
+                <div class="section-body">
+                    <canvas class="data-rate"></canvas>
+                    <script>
+                        var drChart = new DataRateChart('.data-rate')
+                        drChart.generate()
+                    </script>
+                </div>
+            </div>
+            <div class="col">
+                <div class="sub-heading section-header">Protocols<div><i class="fas fa-caret-down"></i></div></div>
+                <div class="section-body">
+                    <canvas class="data-protocol"></canvas>
+                    <script>
+                        var dpChart = new ProtocolChart('.data-protocol')
+                        dpChart.generate()
+                    </script>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <div class="sub-heading section-header">Common Ip<div><i class="fas fa-caret-down"></i></div></div>
+                <div class="section-body">
+                </div>
+            </div>
+            <div class="col">
+                <div class="sub-heading section-header">Live Traffic<div><i class="fas fa-caret-down"></i></div></div>
+                <div class="section-body">
+                </div>
+            </div>
+        </div>
+    </div> -->
+    
+<% } else { %>
+    <div class="link-device-container"> 
+        <div class="sub-heading section-header">Link to device<div><i class="fas fa-caret-down"></i></div></div>
+            <div class="section-body">
+                <style>
+                    .link-device{
+                        padding: 2rem;
+                        display: flex;
+                        justify-content: center;
+                    }
+                    .link-device input{
+                        border-bottom: 1px solid var(--accent);
+                        margin-right: 2rem;
+                        margin-left: 2rem;
+                    }
+                </style>
+                <div class="link-device">
+                    <p style="margin: 0;">Provide this code to the client: </p>
+                    <input oninput="$(this).val('<%= link_code %>')" value="<%= link_code %>"/>
+                </div>
+            </div>
+    </div>
+<% } %>

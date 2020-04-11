@@ -1,0 +1,56 @@
+
+<% if(darkMode) {%>
+    <style>
+        :root{   
+            --text-color: #2fd3aa;
+            --accent: #2fd3aa;
+            --graiant-start: #100b5f;
+            --graiant-end: #0f4089;
+            --navbar-height: 60px;
+            --sub-heading-color: #424242;
+            --ui-item-bg: #333333;
+            --ui-item-bg-hover: #444444;
+            --ui-item-shadow: 4px 4px 3px 2px #0000006e;
+            --ui-item-selected: var(--graiant-start);
+            --device-loading: #dadada;
+        }        
+    </style>
+<% } else { %>
+    <style>
+        :root{   
+            --text-color: #2D2d2d;
+            --accent: #00523d;
+            --graiant-start: #faaca8;
+            --graiant-end: #ddd6f3;
+            --navbar-height: 60px;
+            --sub-heading-color: #eae4ff;
+            --ui-item-bg: #FFFFFF;
+            --ui-item-bg-hover: #e0e0e0;
+            --ui-item-shadow: 4px 4px 3px 2px #4242424f;
+            --ui-item-selected: var(--graiant-start);
+            --device-loading: #2a2a2a;
+        }        
+    </style>
+<% } %>
+<style>
+    :root{
+        font-family: Arial, Helvetica, sans-serif;
+        --red: #ed001c;
+        --black: #2a2a2a;
+        --green: #64bb00;
+    }
+    html{
+        background-color:var(--graiant-start);
+        background-image: linear-gradient(315deg, var(--graiant-start) 0%, var(--graiant-end) 74%);
+    }
+    body{
+        padding: 0;
+        margin: 0;
+    }
+    input{
+        border: 0;
+        background: none;
+        box-shadow: none;
+        border-radius: 0px;
+    }
+</style>
