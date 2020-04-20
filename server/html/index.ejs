@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.20/css/jquery.dataTables.min.css">
+    <script src="https://cdn.datatables.net/1.10.20/js/jquery.dataTables.min.js"></script>
     <script src="https://kit.fontawesome.com/139f91225e.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/google-palette@1.1.0/palette.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.min.js" integrity="sha256-R4pqcOYV8lt7snxMQO/HSbVCFRPMdrhAFMH+vr9giYI=" crossorigin="anonymous"></script>
@@ -212,48 +215,88 @@
             flex:3;
         }
         .data-rate{
-            width: 700px !important;
         }
         .row{
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: column;
+            flex-wrap: wrap;    
         }
         .row div{
-            flex: 1;
             text-align: right;
         }
-        .common-ip-table{
+        #live-data-table{
+            transform: rotateX(0deg);
             display: flex;
             text-align: left;
             flex-direction: column;
             min-width: 25vw;
+            table-layout: fixed;
         }
-        .common-ip-table thead{
+        #live-data-table thead{
             height: 40px;
             line-height: 40px;
             width: 100%;
             background-color: #d0c6e4;
         }
-        .common-ip-table tbody{
+        #live-data-table tbody{
             width: 100%;
-            max-height: 120px;
+            max-height: 200px;
             overflow-y: auto;
         }
-        .common-ip-table thead tr{
+        #live-data-table thead tr{
             display: flex;
             height: inherit;
         }
-        .common-ip-table tbody tr{
+        #live-data-table tbody tr{
             display: flex;
             height: inherit;
         }
-        .common-ip-table tbody tr td{
+        #live-data-table tbody tr td{
             flex: 1;
             padding-left: 10px;
             padding-bottom: 3px;
             padding-top: 3px;
         }
-        .common-ip-table thead tr th{
+        #live-data-table thead tr th{
+            flex: 1;
+            padding-left: 10px;
+        }
+
+
+        #common-ip-table{
+            transform: rotateX(0deg);
+            display: flex;
+            text-align: left;
+            flex-direction: column;
+            min-width: 25vw;
+            table-layout: fixed;
+        }
+        #common-ip-table thead{
+            height: 40px;
+            line-height: 40px;
+            width: 100%;
+            background-color: #d0c6e4;
+        }
+        #common-ip-table tbody{
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #common-ip-table thead tr{
+            display: flex;
+            height: inherit;
+        }
+        #common-ip-table tbody tr{
+            display: flex;
+            height: inherit;
+        }
+        #common-ip-table tbody tr td{
+            flex: 1;
+            padding-left: 10px;
+            padding-bottom: 3px;
+            padding-top: 3px;
+        }
+        #common-ip-table thead tr th{
             flex: 1;
             padding-left: 10px;
         }
@@ -407,7 +450,8 @@
         </div>
     </div>
     <script>
-        selected_device = null
+        var deviceCodeRefresh
+        var selected_device = null
         refreshDevices();
         $('#add-device').click(function (e) { 
             $(this).removeClass('fa-plus')
@@ -434,9 +478,30 @@
                 },
                 function (data, textStatus, jqXHR) {
                     $('.detail-content').html(data);
+                    if(deviceCodeRefresh)
+                        clearInterval(deviceCodeRefresh) 
+                    $.post("/ajax/getDeviceLinkCode", {
+                        device_id: selected_device,
+                    },
+                        function (data, textStatus, jqXHR) {
+                            setLinkCode(data)
+                            deviceCodeRefresh = setInterval(function(){
+                                $.post("/ajax/getDeviceLinkCode", {
+                                    device_id: selected_device,
+                                },
+                                    function (data, textStatus, jqXHR) {
+                                        setLinkCode(data)
+                                    }
+                                );
+                            }, 30000) //30 Seconds
+                        }
+                    );
                 }
             );
         })
+        function setLinkCode(link_code){
+            $('.link-device').find('input').val(link_code);
+        }
         $(document).on('click', '.sub-heading', function(e){
             if($(this).next('.section-body').is(':visible')){
                 $(this).find('.fas').removeClass('fa-caret-down')
@@ -471,7 +536,6 @@
         ws.onmessage = (event) => {
             var message = JSON.parse(event.data)
             if(message['meta']['type'] == 'update'){
-                console.log(selected_device)
                 message['data']['devices'].forEach((device_update, i) => {
                     if(!device_update)
                         return
@@ -487,22 +551,63 @@
                                 if(update.connection_speed)
                                     if(typeof(drChart) != "undefined")
                                         drChart.addData(update.connection_speed)
-                                if(update.updates)
-                                    update.updates.forEach((packet, i) => {
-                                        console.log(packet)
-                                        if(typeof(l3_dpChart) != "undefined")
-                                            if(packet['L3_Protocol'])
-                                                l3_dpChart.addData(packet['L3_Protocol'])
-                                        if(typeof(l4_dpChart) != "undefined")
-                                            if(packet['L4_Protocol'])
-                                                l4_dpChart.addData(packet['L4_Protocol'])
-                                        if(typeof(l4_d_dpChart) != "undefined")
-                                            if(packet['L4_Protocol_Detail'])
-                                                l4_d_dpChart.addData(packet['L4_Protocol_Detail'])
-                                        if(typeof(l2_dpChart) != "undefined")
-                                            if(packet['L2_Protocol'])
-                                                l2_dpChart.addData(packet['L2_Protocol'])
-                                    })
+                                if(update.updates){
+                                    tickerTable.parent().hide(1, function(){
+                                        if(tickerTable.children().length >= 50){
+                                            $('#live-data-table tbody tr:nth-child(-n+'+(tickerTable.children().length-50)+')').remove();
+                                        }
+                                       
+                                        update.updates.forEach((packet, i) => {
+                                            if(tickerTable){
+                                                if(packet.table){
+                                                    tickerCount = tickerCount + 1
+                                                    var children = tickerTable.children();
+                                                    
+                                                    var row = "<tr>"
+                                                    row += '<td>'+tickerCount+'</td>'
+                                                    row += '<td>'+packet.Parsed_Protocol+'</td>'
+                                                    row += '<td>'+packet.table.SrcIP+'</td>'
+                                                    if(packet.table.SrcPort_Desc.length > 0)
+                                                        row += '<td style="color: var(--red); cursor:pointer;" title="'+packet.table.SrcPort_Desc+'">'+packet.table.SrcPort+'</td>'
+                                                    else
+                                                        row += '<td>'+packet.table.SrcPort+'</td>'
+                                                    row += '<td>'+packet.table.DestIP+'</td>'
+                                                    if(packet.table.DestPort_Desc.length > 0)
+                                                        row += '<td style="color: var(--red); cursor:pointer;" title="'+packet.table.DestPort_Desc+'">'+packet.table.DestPort+'</td>'
+                                                    else
+                                                        row += '<td>'+packet.table.DestPort+'</td>'
+                                                    row += '</tr>'
+                                                    tickerTable.append(row)
+                                                }
+                                            }
+                                            if(d_dpChart)
+                                                d_dpChart.addData(packet.Parsed_Protocol)
+                                            if(packet.table){
+                                                
+                                                if(packet.table.SrcIP)
+                                                    if(document.getElementById("ip-"+packet.table.SrcIP) == null){'<td style="color: var(--red); cursor:pointer;" title="'+packet.table.SrcPort_Desc+'">'+packet.table.SrcPort+'</td>'
+                                                        $('#common-ip-table tbody').append("<tr id='ip-"+packet.table.SrcIP+"'><td style='color: var(--red); cursor:pointer;' title='"+(packet.l3_saddr_resolved == undefined ? "Unknown" : packet.l3_saddr_resolved)+"'>"+packet.table.SrcIP+"</td><td>"+1+"</td></tr>");
+                                                    }
+                                                    else{
+                                                        var number = document.getElementById("ip-"+packet.table.SrcIP).childNodes[document.getElementById("ip-"+packet.table.SrcIP).childNodes.length-1]
+                                                        number.innerText = (Number(number.innerText)+1)
+                                                    }
+                                                if(packet.table.DestIP)
+                                                    if(document.getElementById("ip-"+packet.table.DestIP) == null){
+                                                        $('#common-ip-table tbody').append("<tr id='ip-"+packet.table.DestIP+"'><td style='color: var(--red); cursor:pointer;' title='"+(packet.l3_daddr_resolved == undefined ? "Unknown" : packet.l3_daddr_resolved)+"'>"+packet.table.DestIP+"</td><td>"+1+"</td></tr>");
+                                                    }
+                                                    else{
+                                                        var number = document.getElementById("ip-"+packet.table.DestIP).childNodes[document.getElementById("ip-"+packet.table.DestIP).childNodes.length-1]
+                                                        number.innerText = (Number(number.innerText)+1)
+                                                    }
+                                            }
+
+                                        })
+                                        tickerTable.parent().show();
+                                    });
+                                    
+                                }
+                                    
                             })
                         }
                 })

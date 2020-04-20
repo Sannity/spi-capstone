@@ -2,7 +2,6 @@
 <% if(linked == true) { %>
     <div class="other-data">
         <div class="row">
-            <div class="immutable-subheading">D</div>
             <div class="data-rate-container">
                 <div class="sub-heading section-header">Data Rates<div><i class="fas fa-caret-down"></i></div></div>
                 <div class="section-body">
@@ -14,161 +13,48 @@
                 </div>
             </div>
             <div>
-                <div class="sub-heading section-header">Common IPs<div><i class="fas fa-caret-down"></i></div></div>
+                <div class="sub-heading section-header">Live Traffic<div><i class="fas fa-caret-down"></i></div></div>
                 <div class="section-body">
-                    <table class="common-ip-table">
+                    <table id="live-data-table" style="table-layout: fixed;">
                         <thead>
                             <tr>
-                                <th>IP</th>
-                                <th>Resolved</th>
-                                <th>Number</th>
+                                <th>#</th>
+                                <th>Type</th>
+                                <th>Src Ip</th>
+                                <th>Src Port</th>
+                                <th>Dest Ip</th>
+                                <th>Dest Port</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <tr>
-                                <td>8.8.8.8</td>
-                                <td>Google</td>
-                                <td>123</td>
-                            </tr>
-                            <tr>
-                                <td>8.8.8.8</td>
-                                <td>Google</td>
-                                <td>123</td>
-                            </tr>
-                            <tr>
-                                <td>8.8.8.8</td>
-                                <td>Google</td>
-                                <td>123</td>
-                            </tr>
-                            <tr>
-                                <td>8.8.8.8</td>
-                                <td>Google</td>
-                                <td>123</td>
-                            </tr>
-                            <tr>
-                                <td>8.8.8.8</td>
-                                <td>Google</td>
-                                <td>123</td>
-                            </tr>
-                            <tr>
-                                <td>8.8.8.8</td>
-                                <td>Google</td>
-                                <td>123</td>
-                            </tr>
-                            <tr>
-                                <td>8.8.8.8</td>
-                                <td>Google</td>
-                                <td>123</td>
-                            </tr>
-                            <tr>
-                                <td>8.8.8.8</td>
-                                <td>Google</td>
-                                <td>123</td>
-                            </tr>
-                        </tbody>
+                        <tbody></tbody>
                     </table>
+                    <script>
+                        tickerCount = 0;
+                        tickerTable = $('#live-data-table tbody')
+                    </script>
                 </div>
             </div>
         </div>
     </div>
     <div class="protocols">
         <div class="protocol-header">Traffic Types</div>
-        <canvas class="l4-detail-protocol"></canvas>
+        <canvas class="p-detail-protocol"></canvas>
         <script>
-            var l4_d_dpChart = new ProtocolChart('.l4-detail-protocol')
-            l4_d_dpChart.generate()
+            var d_dpChart = new ProtocolChart('.p-detail-protocol')
+            d_dpChart.generate()
         </script>
-        <div class="protocol-header">Layer 4 Protocols</div>
-        <canvas class="l4-protocol"></canvas>
-        <script>
-            var l4_dpChart = new ProtocolChart('.l4-protocol')
-            l4_dpChart.generate()
-        </script>
-        <div class="protocol-header">Layer 3 Protocols</div>
-        <canvas class="l3-protocol"></canvas>
-        <script>
-            var l3_dpChart = new ProtocolChart('.l3-protocol')
-            l3_dpChart.generate()
-        </script>
-        <div class="protocol-header">Layer 2 Protocols</div>
-        <canvas class="l2-protocol"></canvas>
-        <script>
-            var l2_dpChart = new ProtocolChart('.l2-protocol')
-            l2_dpChart.generate()
-        </script>
-    </div>
-
-    <!-- <div class="device-data-container">
-        <style>
-            .row{
-                display: flex;
-                flex-direction: row;
-                flex-wrap: wrap;
-                flex-basis: auto;
-            }
-            .col{
-                display: inline-block;
-                flex:1;
-                min-width:0;
-                min-height: 0;
-                height: 100%;
-            }
-            .section-body{
-                max-height:50vh;
-                overflow-y: scroll;
-            }
-            .traffic-table{
-                width:100%;
-                text-align: left;
-            }
-            .traffic-table thead th{
-                padding:1rem;
-                border-bottom: .001rem solid var(--accent);
-                background-color: var(--ui-item-bg-hover);
-            }
-            .button{
-                color: var(--accent);
-                padding: 10px;
-                border: 1px solid var(--accent);
-                margin-top: 5px;
-            }
-        </style>
-        <div class="row">
-            <div class="col">
-                <div class="sub-heading section-header">Data Rates<div><i class="fas fa-caret-down"></i></div></div>
-                <div class="section-body">
-                    <canvas class="data-rate"></canvas>
-                    <script>
-                        var drChart = new DataRateChart('.data-rate')
-                        drChart.generate()
-                    </script>
-                </div>
-            </div>
-            <div class="col">
-                <div class="sub-heading section-header">Protocols<div><i class="fas fa-caret-down"></i></div></div>
-                <div class="section-body">
-                    <canvas class="data-protocol"></canvas>
-                    <script>
-                        var dpChart = new ProtocolChart('.data-protocol')
-                        dpChart.generate()
-                    </script>
-                </div>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <div class="sub-heading section-header">Common Ip<div><i class="fas fa-caret-down"></i></div></div>
-                <div class="section-body">
-                </div>
-            </div>
-            <div class="col">
-                <div class="sub-heading section-header">Live Traffic<div><i class="fas fa-caret-down"></i></div></div>
-                <div class="section-body">
-                </div>
-            </div>
-        </div>
-    </div> -->
-    
+        <div class="protocol-header">Common Ips</div>
+        <table id="common-ip-table" style="table-layout: fixed;">
+            <thead>
+                <tr>
+                    <th>IP</th>
+                    <th>Times Seen</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>    
 <% } else { %>
     <div class="link-device-container"> 
         <div class="sub-heading section-header">Link to device<div><i class="fas fa-caret-down"></i></div></div>
@@ -187,7 +73,7 @@
                 </style>
                 <div class="link-device">
                     <p style="margin: 0;">Provide this code to the client: </p>
-                    <input oninput="$(this).val('<%= link_code %>')" value="<%= link_code %>"/>
+                    <input value="<%= link_code %>"/>
                 </div>
             </div>
     </div>

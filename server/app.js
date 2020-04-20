@@ -58,8 +58,10 @@ function require_token(req, res, next) {
             })
             res.redirect('/login')
         }
-        else
+        else{
+            req['user_id'] = result[0]['ref_id']
             next();
+        }
     })
 }
 app.get('/', require_token, (req, res) => {
@@ -168,7 +170,7 @@ app.get('/register', (req, res) => {
         })
     } else{
         if(!query['username'] || !query['password'] || !query['email'])
-        res.sendFile('./html/register.html', { root: __dirname })
+        res.render('register')
         else{
             var username = query['username']
 
@@ -252,29 +254,39 @@ app.post('/ajax/getDeviceDetail', require_token, (req, res) => {
     var device_id = req.body.device_id
     var link_query_sqs = "SELECT * FROM auth_token WHERE token_type=(SELECT token_type_id FROM lut_token_types WHERE token_type_desc = 'device') AND active = true AND ref_id = ?"
     db.query(link_query_sqs, [device_id], (err, result) => {
-        var linked = false
         //If Device IS LINKED
         if(result && result.length > 0){
-            var user_id = result[0].device_id
-            linked = true
             res.render('pieces/deviceDetail', {
-                linked: linked,
+                linked: true,
                 link_code: ""
             })
             return
         //If Device IS NOT LINKED
         } else {
-            linked = false
-            link_code = Math.floor(100000 + Math.random() * 900000)
-            var link_query_iqs = "INSERT INTO device_link(device_id, user_id, link_code) VALUES (?,?,?)"
-            db.query(link_query_iqs, [device_id, user_id, link_code], (err, result) => {
-                res.render('pieces/deviceDetail', {
-                    linked: linked,
-                    link_code: link_code
-                })
-                return
+            res.render('pieces/deviceDetail', {
+                linked: false,
+                link_code: ""
             })
+            return
         }
+    })
+})
+
+app.post('/ajax/getDeviceLinkCode', require_token, (req, res) => {
+    var device_id = req.body.device_id
+    link_code_dqs = "DELETE FROM device_link WHERE create_date < (now() - interval 30 second) OR device_id = ?;"
+    db.query(link_code_dqs, [device_id] ,(err, result) => {
+        link_query_sqs = "SELECT * FROM device_link WHERE device_id = ?"
+        
+        link_code = Math.floor(100000 + Math.random() * 900000)
+        var link_query_iqs = "INSERT INTO device_link(device_id, user_id, link_code) VALUES (?,?,?)"
+        db.query(link_query_iqs, [device_id, req.user_id, link_code], (err, result) => {
+            if(result)
+                res.send(link_code.toString())
+            else
+                res.send(null)
+            return
+        })
     })
 })
 
@@ -307,48 +319,52 @@ class DataUpdate{
 
 class ClientMessage{
     constructor(message){
-        this.message = JSON.parse(message)    
+        this.message = JSON.parse(message)
+        console.log(this.message)    
     }
     process(calling_ws){
         var query_result = { meta: {}, data:{} }
         if(this.message['meta']['type'] == 'link'){
-            var link_code =  this.message['data']['code']
-            var link_code_sqs = "SELECT * FROM device_link WHERE link_code = ? AND linked = false"
-            db.query(link_code_sqs, [link_code], (err, link_code_sresult) =>{
-                if(err || link_code_sresult.length <= 0){
-                    query_result['meta']['type'] = "link_result"
-                    query_result['data']['success'] = false
-                    query_result['data']['message'] = "Problem Finding Link Code"
-                    calling_ws.send(JSON.stringify(query_result))
-                    return
-                }
-                var device_id = link_code_sresult[0]['device_id']
-                var token = uuidv4()
-                var device_link_dqs = "DELETE FROM device_link WHERE link_code = ?"
-                db.query(device_link_dqs, [link_code], (err, link_delete_result) => {
-                    var token_iqs = "INSERT INTO auth_token(token, ref_id, token_type) VALUES (?,?, (SELECT token_type_id FROM lut_token_types WHERE token_type_desc = 'device'))"
-                    db.query(token_iqs, [token, device_id], (err, token_result) => {
+            var link_code_dqs = "DELETE FROM device_link WHERE create_date < (now() - interval 30 second)"
+            db.query(link_code_dqs, (err, result) => {
+                var link_code =  this.message['data']['code']
+                var link_code_sqs = "SELECT * FROM device_link WHERE link_code = ?"
+                db.query(link_code_sqs, [link_code], (err, link_code_sresult) =>{
+                    if(err || link_code_sresult.length <= 0){
                         query_result['meta']['type'] = "link_result"
                         query_result['data']['success'] = false
-                        if(err){
-                            query_result['data']['message'] = "Problem Getting Token"
-                            calling_ws.send(JSON.stringify(query_result))
-                        }   
-                        else if (token_result.affectedRows <= 0){
-                            query_result['data']['message'] = "Problem Getting Token"
-                            calling_ws.send(JSON.stringify(query_result))
-                        }   
-                        else {
-                            var device_sqs = "SELECT * FROM device WHERE device_id = ?"
-                            db.query(device_sqs, [device_id], (err, device_result) => {
-                                calling_ws.device_id = device_id;
-                                server_msg("Device "+query_result['data']['device_name']+" has joined")
-                                query_result['data']['success'] = true
-                                query_result['data']['token'] = token
-                                query_result['data']['device_name'] = device_result[0]['device_name']
+                        query_result['data']['message'] = "Problem Finding Link Code"
+                        calling_ws.send(JSON.stringify(query_result))
+                        return
+                    }
+                    var device_id = link_code_sresult[0]['device_id']
+                    var token = uuidv4()
+                    var device_link_dqs = "DELETE FROM device_link WHERE link_code = ?"
+                    db.query(device_link_dqs, [link_code], (err, link_delete_result) => {
+                        var token_iqs = "INSERT INTO auth_token(token, ref_id, token_type) VALUES (?,?, (SELECT token_type_id FROM lut_token_types WHERE token_type_desc = 'device'))"
+                        db.query(token_iqs, [token, device_id], (err, token_result) => {
+                            query_result['meta']['type'] = "link_result"
+                            query_result['data']['success'] = false
+                            if(err){
+                                query_result['data']['message'] = "Problem Getting Token"
                                 calling_ws.send(JSON.stringify(query_result))
-                            })
-                        }
+                            }   
+                            else if (token_result.affectedRows <= 0){
+                                query_result['data']['message'] = "Problem Getting Token"
+                                calling_ws.send(JSON.stringify(query_result))
+                            }   
+                            else {
+                                var device_sqs = "SELECT * FROM device WHERE device_id = ?"
+                                db.query(device_sqs, [device_id], (err, device_result) => {
+                                    calling_ws.device_id = device_id;
+                                    server_msg("Device "+query_result['data']['device_name']+" has joined")
+                                    query_result['data']['success'] = true
+                                    query_result['data']['token'] = token
+                                    query_result['data']['device_name'] = device_result[0]['device_name']
+                                    calling_ws.send(JSON.stringify(query_result))
+                                })
+                            }
+                        })
                     })
                 })
             })
