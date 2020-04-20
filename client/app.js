@@ -10,6 +10,8 @@ var protocols = require('./resources/protocols.json')
 var tcp_ports = require('./resources/tcp_ports.json')
 var udp_ports = require('./resources/udp_ports.json')
 
+var dns_resolves = []
+
 const client_name = "["+(config.has('device_name') ? config.get('device_name') : 'Unknown Device')+"] "
 
 const optionDefinitions = [
@@ -156,82 +158,43 @@ class ServerPacket{
                 break;
         }
         if(!((this.update['l3_saddr'] == options['remote_ip'] || this.update['l3_daddr'] == options['remote_ip']) && (this.update.table['SrcPort'] == options['remote_port'] || this.update.table['DestPort'] == options['remote_port'] ))){
-            if(this.update['l3_saddr'] && this.update['l3_daddr'])
-                dns.reverse(this.update['l3_saddr'], (err, response) => {
-                    this.update['l3_saddr_resolved'] = response
-                    dns.reverse(this.update['l3_daddr'], (err, response) => {
-                        this.update['l3_daddr_resolved'] = response
+            if(this.update['l3_saddr'] && this.update['l3_daddr']){
+                if(dns_resolves[this.update['l3_saddr']]){
+                    this.update['l3_saddr_resolved'] = dns_resolves[this.update['l3_saddr']]
+                    if(dns_resolves[this.update['l3_daddr']]){
+                        this.update['l3_daddr_resolved'] = dns_resolves[this.update['l3_daddr']]
                         updates.push(this.update)
+                    }
+                    else{
+                        dns.reverse(this.update['l3_daddr'], (err, response) => {
+                            this.update['l3_daddr_resolved'] = response
+                            dns_resolves[this.update['l3_daddr']] = response
+                            updates.push(this.update)
+                        })
+                    }
+                }
+                else{
+                    dns.reverse(this.update['l3_saddr'], (err, response) => {
+                        this.update['l3_saddr_resolved'] = response
+                        dns_resolves[this.update['l3_saddr']] = response
+                        if(dns_resolves[this.update['l3_daddr']]){
+                            this.update['l3_daddr_resolved'] = dns_resolves[this.update['l3_daddr']]
+                            updates.push(this.update)
+                        }
+                        else{
+                            dns.reverse(this.update['l3_daddr'], (err, response) => {
+                                this.update['l3_daddr_resolved'] = response
+                                dns_resolves[this.update['l3_daddr']] = response
+                                updates.push(this.update)
+                            })
+                        }
                     })
-                })
+                }
+            }
             else
                 updates.push(this.update)
         }
         return
-        this.info['Protocol_Parsed'] = "Other"
-        if(this.packet.link_type == "LINKTYPE_ETHERNET"){
-            this.info['eth'] = {}
-            this.info.eth['dhost'] = this.packet.payload.dhost.addr.map((e) => {
-                var hex = e.toString(16)
-                if(hex.length == 1)
-                    hex = '0'+hex
-                return hex
-            }).join(':')
-            this.info.eth['shost'] = this.packet.payload.shost.addr.map((e) => {
-                var hex = e.toString(16)
-                if(hex.length == 1)
-                    hex = '0'+hex
-                return hex
-            }).join(':')
-            switch(this.packet.payload.payload.constructor.name){
-                case 'IPv4':
-                    this.info.eth['payload_type'] = 'IPv4'
-                    this.info['ip'] = {}
-                    this.info.ip['saddr'] = this.packet.payload.payload.saddr.addr.join('.')
-                    this.info.ip['daddr'] = this.packet.payload.payload.daddr.addr.join('.')
-                    this.info['protocol'] = protocols[protocols.findIndex((el) => el.Decimal == this.packet.payload.payload.protocol)].Keyword
-                    
-                    if(this.info['protocol'] == "TCP"){
-                        var tcp_protocol, tcp_port
-                        tcp_protocol = tcp_ports.findIndex((el) => el.port == this.packet.payload.payload.payload.sport)
-                        if(tcp_protocol == -1){
-                            tcp_protocol = tcp_ports.findIndex((el) => el.port == this.packet.payload.payload.payload.dport)
-                            if(tcp_protocol == -1)
-                                tcp_protocol = 'Unknown'
-                            else{
-                                tcp_port = tcp_ports[tcp_protocol].port
-                                tcp_protocol = tcp_ports[tcp_protocol].description
-                            }
-                        }else{
-                            tcp_port = tcp_ports[tcp_protocol].port
-                            tcp_protocol = tcp_ports[tcp_protocol].description
-                        }
-                        this.info['Protocol_Parsed'] = tcp_protocol
-                        //Attempt to Filter out traffic that belongs to this program
-                        if((this.info.ip.saddr == options['remote_ip'] || this.info.ip.daddr == options['remote_ip']) && tcp_port == options['remote_port'])
-                            filtered = false
-                    }
-                    break
-                case 'Arp':
-                    this.info['eth'] = {}
-                    this.info.eth['dhost'] = this.packet.payload.dhost.addr.map((e) => {
-                        var hex = e.toString(16)
-                        if(hex.length == 1)
-                            hex = '0'+hex
-                        return hex
-                    }).join(':')
-                    this.info.eth['shost'] = this.packet.payload.shost.addr.map((e) => {
-                        var hex = e.toString(16)
-                        if(hex.length == 1)
-                            hex = '0'+hex
-                        return hex
-                    }).join(':')
-                    this.info['Protocol_Parsed'] = "ARP"
-                    break
-            }
-        }else{
-            console.error('UNKNOWN PACKET, CANNOT READ');
-        }
     }
 }
 
