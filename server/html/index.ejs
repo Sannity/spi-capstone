@@ -552,7 +552,8 @@
                                     if(typeof(drChart) != "undefined")
                                         drChart.addData(update.connection_speed)
                                 if(update.updates){
-                                    tickerTable.parent().hide(1, function(){
+                                    $('#common-ip-table').hide(1, function(){
+                                        tickerTable.parent().hide(1, function(){
                                         if(tickerTable.children().length >= 50){
                                             $('#live-data-table tbody tr:nth-child(-n+'+(tickerTable.children().length-50)+')').remove();
                                         }
@@ -585,27 +586,31 @@
                                             if(packet.table){
                                                 
                                                 if(packet.table.SrcIP)
-                                                    if(document.getElementById("ip-"+packet.table.SrcIP) == null){'<td style="color: var(--red); cursor:pointer;" title="'+packet.table.SrcPort_Desc+'">'+packet.table.SrcPort+'</td>'
+                                                    var element = document.getElementById("ip-"+packet.table.SrcIP)
+                                                    if(element == null){'<td style="color: var(--red); cursor:pointer;" title="'+packet.table.SrcPort_Desc+'">'+packet.table.SrcPort+'</td>'
                                                         $('#common-ip-table tbody').append("<tr id='ip-"+packet.table.SrcIP+"'><td style='color: var(--red); cursor:pointer;' title='"+(packet.l3_saddr_resolved == undefined ? "Unknown" : packet.l3_saddr_resolved)+"'>"+packet.table.SrcIP+"</td><td>"+1+"</td></tr>");
                                                     }
                                                     else{
-                                                        var number = document.getElementById("ip-"+packet.table.SrcIP).childNodes[document.getElementById("ip-"+packet.table.SrcIP).childNodes.length-1]
+                                                        var number = element.childNodes[element.childNodes.length-1]
                                                         number.innerText = (Number(number.innerText)+1)
                                                     }
                                                 if(packet.table.DestIP)
-                                                    if(document.getElementById("ip-"+packet.table.DestIP) == null){
+                                                    var element = document.getElementById("ip-"+packet.table.DestIP)
+                                                    if(element == null){
                                                         $('#common-ip-table tbody').append("<tr id='ip-"+packet.table.DestIP+"'><td style='color: var(--red); cursor:pointer;' title='"+(packet.l3_daddr_resolved == undefined ? "Unknown" : packet.l3_daddr_resolved)+"'>"+packet.table.DestIP+"</td><td>"+1+"</td></tr>");
                                                     }
                                                     else{
-                                                        var number = document.getElementById("ip-"+packet.table.DestIP).childNodes[document.getElementById("ip-"+packet.table.DestIP).childNodes.length-1]
+                                                        var number = element.childNodes[element.childNodes.length-1]
                                                         number.innerText = (Number(number.innerText)+1)
                                                     }
                                             }
 
                                         })
                                         tickerTable.parent().show();
-                                    });
-                                    
+                                        });
+                                        $('#common-ip-table').show();
+                                    })
+
                                 }
                                     
                             })
