@@ -1,19 +1,22 @@
 const WebSocket = require('ws')
 var config = require('config')
 const fs = require('fs')
+const dns = require('dns');
 const commandLineArgs = require('command-line-args')
 const NetworkSpeed = require('network-speed');
 const testNetworkSpeed = new NetworkSpeed();
 
 var protocols = require('./resources/protocols.json')
 var tcp_ports = require('./resources/tcp_ports.json')
+var udp_ports = require('./resources/udp_ports.json')
 
 const client_name = "["+(config.has('device_name') ? config.get('device_name') : 'Unknown Device')+"] "
 
 const optionDefinitions = [
     { name: 'link', alias: 'l', type: String, multiple: false},
-    { name: 'remote_ip', alias: 'a', type: String, multiple: false}, //, defaultOption: '127.0.0.1', defaultValue: '127.0.0.1'
-    { name: 'remote_port', alias: 'p', type: String, multiple: false} //, defaultOption: '8080', defaultValue: '8080'
+    { name: 'interface', alias: 'i', type: String, multiple: false},
+    { name: 'remote_ip', alias: 'a', type: String, multiple: false},
+    { name: 'remote_port', alias: 'p', type: String, multiple: false}
 ]
 const options = commandLineArgs(optionDefinitions)
 
@@ -29,6 +32,7 @@ console_msg = (message) => {
 class ServerMessage{
     constructor(message){
         this.message = JSON.parse(message)
+        console.log(this.message)
     }
     process(calling_ws){
         if(this.message['meta']['type'] == 'error')
@@ -60,8 +64,111 @@ class ServerPacket{
         this.packet = packet
         this.info = {}
     }
-    process(){
-        var filtered = true;
+    async process(){
+        this.update = {}
+        this.update['Parsed_Protocol'] = "Other";
+        
+        //Layer 2 Protocol Switch
+        switch (this.packet.link_type) {
+            case 'LINKTYPE_ETHERNET':
+                var eth_packet = this.packet.payload;
+                //MAC Destination
+                var eth_daddr = eth_packet.dhost.addr.map((e) => {
+                    var hex = e.toString(16)
+                    if(hex.length == 1)
+                        hex = '0'+hex
+                    return hex
+                }).join(':')
+                this.update['eth_daddr'] = eth_daddr
+
+                //MAC Source
+                var eth_saddr = eth_packet.shost.addr.map((e) => {
+                    var hex = e.toString(16)
+                    if(hex.length == 1)
+                        hex = '0'+hex
+                    return hex
+                }).join(':')
+                this.update['eth_saddr'] = eth_saddr
+
+                //Layer 3 Protocol Switch
+                var l3_Packet = eth_packet.payload
+                switch (l3_Packet.constructor.name) {
+                    case 'IPv4':
+                        this.update['l3_saddr'] = l3_Packet.saddr.addr.join('.')
+                        this.update['l3_daddr'] = l3_Packet.daddr.addr.join('.')
+
+                        //Layer 4 Protocol Switch
+                        var l4_Packet = l3_Packet.payload
+                        switch (l4_Packet.constructor.name) {
+                            case 'TCP':
+                                this.update['Parsed_Protocol'] = "TCP"
+                                this.update['table'] = {}
+                                this.update.table['SrcIP'] = this.update['l3_saddr']
+                                this.update.table['SrcPort'] = l4_Packet.sport
+                                this.update.table['SrcPort_Desc'] = (tcp_ports.findIndex((el) => el.port == l4_Packet.sport) == -1 ? "" : tcp_ports[tcp_ports.findIndex((el) => el.port == l4_Packet.sport)].description)
+                                this.update.table['DestIP'] = this.update['l3_daddr']
+                                this.update.table['DestPort'] = l4_Packet.dport
+                                this.update.table['DestPort_Desc'] = (tcp_ports.findIndex((el) => el.port == l4_Packet.dport) == -1 ? "" : tcp_ports[tcp_ports.findIndex((el) => el.port == l4_Packet.dport)].description)
+                                break;
+                            case 'UDP':
+                                this.update['Parsed_Protocol'] = "UDP"
+                                this.update['table'] = {}
+                                this.update.table['SrcIP'] = this.update['l3_saddr']
+                                this.update.table['SrcPort'] = l4_Packet.sport
+                                this.update.table['SrcPort_Desc'] = (udp_ports.findIndex((el) => el.port == l4_Packet.sport) == -1 ? "" : udp_ports[udp_ports.findIndex((el) => el.port == l4_Packet.sport)].description)
+                                this.update.table['DestIP'] = this.update['l3_daddr']
+                                this.update.table['DestPort'] = l4_Packet.dport
+                                this.update.table['DestPort_Desc'] = (udp_ports.findIndex((el) => el.port == l4_Packet.dport) == -1 ? "" : udp_ports[udp_ports.findIndex((el) => el.port == l4_Packet.dport)].description)
+                                break;
+                            case 'ICMP':
+                                this.update['Parsed_Protocol'] = "ICMP"
+                                console.log(l4_Packet)
+                                this.update['table'] = {}
+                                this.update.table['SrcIP'] = this.update['l3_saddr']
+                                this.update.table['SrcPort'] = ""
+                                this.update.table['SrcPort_Desc'] = ""
+                                this.update.table['DestIP'] = this.update['l3_daddr']
+                                this.update.table['DestPort'] = ""
+                                this.update.table['DestPort_Desc'] = ""
+                                break;
+                            default:
+                                console.log(l4_Packet.constructor.name)
+                                break;
+                        }
+                        break
+                    case 'Arp':
+                        this.update['Parsed_Protocol'] = "Arp"
+                        this.update['l3_saddr'] = l3_Packet.sender_pa.addr.join('.')
+                        this.update['l3_daddr'] = l3_Packet.target_pa.addr.join('.')
+                        this.update['table'] = {}
+                        this.update.table['SrcIP'] = l3_Packet.sender_pa.addr.join('.')
+                        this.update.table['SrcPort'] = ""
+                        this.update.table['SrcPort_Desc'] = ""
+                        this.update.table['DestIP'] = l3_Packet.target_pa.addr.join('.')
+                        this.update.table['DestPort'] = ""
+                        this.update.table['DestPort_Desc'] = ""
+                        break
+                    default:
+                        break
+                }
+                break;
+            default:
+                break;
+        }
+        if(!((this.update['l3_saddr'] == options['remote_ip'] || this.update['l3_daddr'] == options['remote_ip']) && (this.update.table['SrcPort'] == options['remote_port'] || this.update.table['DestPort'] == options['remote_port'] ))){
+            if(this.update['l3_saddr'] && this.update['l3_daddr'])
+                dns.reverse(this.update['l3_saddr'], (err, response) => {
+                    this.update['l3_saddr_resolved'] = response
+                    dns.reverse(this.update['l3_daddr'], (err, response) => {
+                        this.update['l3_daddr_resolved'] = response
+                        updates.push(this.update)
+                    })
+                })
+            else
+                updates.push(this.update)
+        }
+        return
+        this.info['Protocol_Parsed'] = "Other"
         if(this.packet.link_type == "LINKTYPE_ETHERNET"){
             this.info['eth'] = {}
             this.info.eth['dhost'] = this.packet.payload.dhost.addr.map((e) => {
@@ -99,20 +206,32 @@ class ServerPacket{
                             tcp_port = tcp_ports[tcp_protocol].port
                             tcp_protocol = tcp_ports[tcp_protocol].description
                         }
-                        this.info['protocol'] = tcp_protocol
+                        this.info['Protocol_Parsed'] = tcp_protocol
                         //Attempt to Filter out traffic that belongs to this program
                         if((this.info.ip.saddr == options['remote_ip'] || this.info.ip.daddr == options['remote_ip']) && tcp_port == options['remote_port'])
                             filtered = false
                     }
                     break
                 case 'Arp':
+                    this.info['eth'] = {}
+                    this.info.eth['dhost'] = this.packet.payload.dhost.addr.map((e) => {
+                        var hex = e.toString(16)
+                        if(hex.length == 1)
+                            hex = '0'+hex
+                        return hex
+                    }).join(':')
+                    this.info.eth['shost'] = this.packet.payload.shost.addr.map((e) => {
+                        var hex = e.toString(16)
+                        if(hex.length == 1)
+                            hex = '0'+hex
+                        return hex
+                    }).join(':')
+                    this.info['Protocol_Parsed'] = "ARP"
                     break
             }
         }else{
             console.error('UNKNOWN PACKET, CANNOT READ');
         }
-        if(filtered)
-            updates.push(this.info)
     }
 }
 
@@ -125,6 +244,9 @@ function connect(){
     ws.on('close', connect)
 
     ws.on('open', () => {
+        ws.on('message', function(message){
+            (new ServerMessage(message)).process(this)
+        })
         console_msg("Connection Complete")
         if(options['link']){
             console_msg('Atttempting Link')
@@ -138,9 +260,9 @@ function connect(){
             }
             ws.send(JSON.stringify(link_query))
         }
-        if(config.get('token')){
+        if(config.has('token')){
             var pcap = require('pcap'),
-                pcap_session = pcap.createSession();
+                pcap_session = pcap.createSession(options['interface']);
             pcap_session.on('packet', function (raw_packet) {
                 (new ServerPacket(pcap.decode.packet(raw_packet))).process();
             });
@@ -177,9 +299,6 @@ function connect(){
         clearTimeout(this.pingTimeout)
         console_error("Connection Lost ("+code+") "+ reason)
     })
-    ws.on('message', function(message){
-        (new ServerMessage(message)).process(this)
-    })
 }
 
 function heartbeat(){
@@ -192,5 +311,6 @@ function heartbeat(){
 //Die if there is no remote server provided.
 if(!options['remote_port'] || !options['remote_ip'])
     console_error("Please provide server port(-p) and ip(-a)")
-
+if(!options['interface'])
+    console_error("Please prive an interface(-i)")
 connect()
