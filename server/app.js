@@ -278,7 +278,7 @@ app.post('/ajax/getDeviceLinkCode', require_token, (req, res) => {
     db.query(link_code_dqs, [device_id] ,(err, result) => {
         link_query_sqs = "SELECT * FROM device_link WHERE device_id = ?"
         
-        link_code = Math.floor(100000 + Math.random() * 900000)
+        link_code = Math.floor(1000000000000000 + Math.random() * 9000000000000000)
         var link_query_iqs = "INSERT INTO device_link(device_id, user_id, link_code) VALUES (?,?,?)"
         db.query(link_query_iqs, [device_id, req.user_id, link_code], (err, result) => {
             if(result)
